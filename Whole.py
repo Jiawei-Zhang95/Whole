@@ -75,7 +75,7 @@ class EarlyStoppingByLossVal(Callback):
                 self.model.stop_training =True
 
 
-tradeday_series = pd.read_csv('tradeday_series.csv',index_col=None)
+tradeday_series = pd.read_csv(r'C:\Users\user\Desktop\my-LSTM-Project\Stock-LSTM-master\Stock-LSTM-master\tradeday_series.csv',index_col=None)
 start = 20190101 #训练集开始日期
 end = 20190514 #测试集结束日期（测试集开始为 end - start + （train_day - valid_day））
 train_day = 30
@@ -183,7 +183,7 @@ for i in range(len(tradeday_series) - train_day - valid_day - test_day + 1):
     model.add(Dense(3, activation='sigmoid'))
     adam = optimizers.Adam(lr=0.001, beta_1=0.9,beta_2=0.999, epsilon=1e-08,decay=0.0)
     model.compile(loss='categorical_crossentropy',optimizer='adam',metrics=['accuracy'])
-    model.fit(train_x,train_y,epochs=10,validation_data=(valid_x,valid_y),callbacks=callbacks,shuffle=False,verbose=2,batch_size=batch_size)
+    model.fit(train_x,train_y,epochs=10,validation_data=(valid_x,valid_y),callbacks=callbacks,shuffle=False,verbose=0,batch_size=batch_size)
     #模型评估
     scores,results = model.evaluate(test_x,test_y,verbose=0)
     #预测值pred_y
