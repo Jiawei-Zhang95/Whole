@@ -11,21 +11,21 @@ import pandas as pd
 import numpy as np
 import pdb
 import warnings
+from keras import optimizers
 from keras.models import load_model
 from keras.models import Sequential
 from keras.layers import Dense,Dropout,LSTM,TimeDistributed
 from keras.wrappers.scikit_learn import KerasClassifier
 from keras.utils import np_utils
 from keras.callbacks import Callback,EarlyStopping, ModelCheckpoint
-from keras import optimizers
 from sklearn.cross_validation import cross_val_score
 from sklearn.cross_validation import KFold
 from sklearn.preprocessing import OneHotEncoder,MinMaxScaler
 from sklearn.pipeline import Pipeline
 pd.set_option('display.max_columns', 10)
 
-path =r'C:\Users\user\Desktop\my-LSTM-Project\Stock-LSTM-master\Stock-LSTM-master\000025.SZ'
-operate_path =r'C:\Users\user\Desktop\my-LSTM-Project\Stock-LSTM-master\Stock-LSTM-master\testresult'
+path =r'/Users/jimmy/Desktop/TestResult/000025.SZ'
+operate_path =r'/Users/jimmy/Desktop/TestResult/PredandActual'
 
 #计算每一个交易日的上涨，横盘，下跌样本数
 #以及每一个交易日的上涨，横盘，下跌准确率
@@ -34,6 +34,10 @@ def precisionCalculate(pred_y, test_y,test_start_date):
     firstZero = len(count[count==0]) #两者预测都为上涨的个数
     intersectZero = np.sum(list(map(lambda x,y: (x==y==1) , pred_y, test_y)))#两者预测都为横盘的个数
     countFour = len(count[count == 4])#两者预测都为下跌的个数
+    temp1 = len(pred_y[pred_y==1])
+    intersectZero = 0 if temp1 == 0 else intersectZero
+    temp2 = len(pred_y[pred_y==2])
+    countFour = 0 if temp2 == 0 else countFour
 
     precision1 = firstZero / len(pred_y[pred_y==0] ) #precision1： 上涨准确率
     precision2 = intersectZero / len(pred_y[pred_y==1]) #precision2： 横盘准确率
@@ -75,7 +79,7 @@ class EarlyStoppingByLossVal(Callback):
                 self.model.stop_training =True
 
 
-tradeday_series = pd.read_csv(r'C:\Users\user\Desktop\my-LSTM-Project\Stock-LSTM-master\Stock-LSTM-master\tradeday_series.csv',index_col=None)
+tradeday_series = pd.read_csv(r'/Users/jimmy/Desktop/TestResult/tradeday_series.csv',index_col=None)
 start = 20190101 #训练集开始日期
 end = 20190514 #测试集结束日期（测试集开始为 end - start + （train_day - valid_day））
 train_day = 30
@@ -180,10 +184,10 @@ for i in range(len(tradeday_series) - train_day - valid_day - test_day + 1):
     #初始化LSTM模型
     model = Sequential()
     model.add(LSTM(64,input_shape=(1,90),activation='relu'))
-    model.add(Dense(3, activation='sigmoid'))
+    model.add(Dense(3, activation='softmax'))
     adam = optimizers.Adam(lr=0.001, beta_1=0.9,beta_2=0.999, epsilon=1e-08,decay=0.0)
     model.compile(loss='categorical_crossentropy',optimizer='adam',metrics=['accuracy'])
-    model.fit(train_x,train_y,epochs=10,validation_data=(valid_x,valid_y),callbacks=callbacks,shuffle=False,verbose=0,batch_size=batch_size)
+    model.fit(train_x,train_y,epochs=10,validation_data=(valid_x,valid_y),callbacks=callbacks,shuffle=False,verbose=2,batch_size=batch_size)
     #模型评估
     scores,results = model.evaluate(test_x,test_y,verbose=0)
     #预测值pred_y
@@ -196,7 +200,7 @@ for i in range(len(tradeday_series) - train_day - valid_day - test_day + 1):
     pred_y_prob = model.predict_proba(test_x)
     # 打印出总体准确率
     print('Accuracy: %0.3f' % results)
-    pdb.set_trace()
+
     #从现在开始创建第二个LSTM
     #train_x , test_x保持不变
     #train_y2 = model.predict(train_x) * test_y_temp
@@ -210,7 +214,10 @@ for i in range(len(tradeday_series) - train_day - valid_day - test_day + 1):
     test_y_temp = np.argmax(test_y,1)
     train_y2 = model.predict(train_x) #新的train_y2
     train_y2 = np.argmax(train_y2,1)
-    test_y2 = pred_y #新的test_y2
+    test_y2 = model.predict(test_x) #新的test_y2
+    test_y2 = np.argmax(test_y2,1)
+
+
 
     def shift(arr,num, fill_value = np.nan):
         result = np.empty_like(arr)
@@ -224,29 +231,42 @@ for i in range(len(tradeday_series) - train_day - valid_day - test_day + 1):
             result[:] = arr
         return result
 
-    #train_y2 = shift(train_y2,-1,0)
+    train_y2 = shift(train_y2,-1,0)
     #乘以test_y_temp
     train_y2 = train_y2 * train_y_temp
     test_y2 = test_y2 * test_y_temp
-
     #哦对我忘记了验证集的x，y， 现在开始初始化验证集
+    valid_y2_temp = np.argmax(valid_y,1)
     valid_y2 = model.predict(valid_x)
     valid_y2 = np.argmax(valid_y2,1)
+    valid_y2 = valid_y2 * valid_y2_temp
     train_y2[(train_y2 == 0) | (train_y2 == 4)] = 1
-    test_y2[(test_y2 == 0) | (test_y2 == 4)] == 1
-    valid_y2[(valid_y2 ==0) | (valid_y2 == 4)] == 1
+    test_y2[(test_y2 == 0) | (test_y2 == 4)] = 1
+    valid_y2[(valid_y2 ==0) | (valid_y2 == 4)] = 1
+
+
+    encode1= train_y2.reshape(len(train_y2), 1)
+    encode2= test_y2.reshape(len(test_y2), 1)
+    encode3 = valid_y2.reshape(len(valid_y2), 1)
+    train_y2 = onehot_encoder.fit_transform(encode1).toarray()
+    test_y2 = onehot_encoder.fit_transform(encode2).toarray()
+    valid_y2 = onehot_encoder.fit_transform(encode3).toarray()
+
     print(train_x.shape, train_y2.shape, test_x.shape, test_y2.shape, valid_x.shape, valid_y2.shape)
+
+    pdb.set_trace()
     model2 = Sequential()
-    #model2.add(LSTM(64,input_shape=(1,90)))
-    model2.add(Dense(60,input(90),activation='relu'))
-    model2.add(Dense(1,activation='sigmoid'))
-    model2.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model2.add(LSTM(64,input_shape=(1,90),activation='relu'))
+    #model2.add(Dense(60,input(90),activation='relu'))
+    model2.add(Dense(2,activation='softmax'))
+    model2.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     model2.fit(train_x, train_y2, epochs=10, validation_data=(valid_x, valid_y2), shuffle=False,
-              verbose=2, batch_size=5)
+              verbose=2, batch_size=128)
     # 模型评估
     scores2, results2 = model2.evaluate(test_x, test_y2, verbose=0)
     print('Accurcy2= %0.3f' % results2)
-
+    pred_y2 = model2.predict(test_x)
+    print(pred_y2)
     pdb.set_trace()
 
     df_temp = precisionCalculate(pred_y,test_y_alter,test_start_date)
@@ -267,14 +287,10 @@ for i in range(len(tradeday_series) - train_day - valid_day - test_day + 1):
         prediction['Result'] = (prediction['Result'] -1) * (-1)
         prediction['Actual'] = (prediction['Actual']-1) * (-1)
         prediction.to_csv(operate_path + '/%s.csv' %test_start_date,index=False)
-    toCsv(pred_y,pred_y_prob,test_y_alter)
+    #toCsv(pred_y,pred_y_prob,test_y_alter)
     print('CSV has already been uploaded on date: %s' %test_start_date)
 
 
 df_result.to_excel(operate_path +'/样本比例和准确率2.xlsx',index=False)
-
-
-
-
 
 
