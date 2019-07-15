@@ -208,23 +208,6 @@ for i in range(len(tradeday_series) - train_day - valid_day - test_day + 1):
     # 打印出总体准确率
     print('Accuracy: %0.3f' % results)
 
-    #从现在开始创建第二个LSTM
-    #train_x , test_x保持不变
-    #train_y2 = model.predict(train_x) * test_y_temp
-    #test_y2 = model.predict(test_x) & test_y_temp
-    #y的结果为0或者4，为1。 y的结果为1或者2，为0
-    #输出的label为0，1
-
-    # 这是train_y2 和 test_y2都要乘的东西
-
-    train_y_temp = np.argmax(train_y, 1)
-    test_y_temp = np.argmax(test_y, 1)
-    train_y2 = model.predict(train_x)  # 新的train_y2
-    train_y2 = np.argmax(train_y2, 1)
-    test_y2 = model.predict(test_x)  # 新的test_y2
-    test_y2 = np.argmax(test_y2, 1)
-
-
     def shift(arr, num, fill_value=np.nan):
         result = np.empty_like(arr)
         if num > 0:
@@ -236,28 +219,35 @@ for i in range(len(tradeday_series) - train_day - valid_day - test_day + 1):
         else:
             result[:] = arr
         return result
+    #从现在开始创建第二个LSTM
+    #train_x , test_x保持不变
+    #train_y2 = model.predict(train_x) * test_y_temp
+    #test_y2 = model.predict(test_x) & test_y_temp
+    #y的结果为0或者4，为1。 y的结果为1或者2，为0
+    #输出的label为0，1
 
+    # 这是train_y2 和 test_y2都要乘的东西
 
+    train_y_temp,test_y_temp,valid_y2_temp = np.argmax(train_y, 1),np.argmax(test_y,1),np.argmax(valid_y,1)
+    train_y2,test_y2,valid_y2 = model.predict(train_x),model.predict(test_x),model.predict(valid_x)
     train_y2 = shift(train_y2, -1, 0)
+    train_y2,test_y2,valid_y2 = np.argmax(train_y2,1),np.argmax(test_y2,1),np.argmax(valid_y2,1)
+    train_y2_temp,test_y2_temp,valid_y2_temp = train_y_temp+1,test_y_temp+1,valid_y2_temp+1
+
     # 乘以test_y_temp
+    train_y_temp,test_y_temp,valid_y2_temp = train_y_temp+1, test_y_temp+1, valid_y2_temp+1
+    train_y2,test_y2,valid_y2 = train_y2+1,test_y2+1,valid_y2+1
     train_y2 = train_y2 * train_y_temp
     test_y2 = test_y2 * test_y_temp#问题出在test_y2的0
-
-    # 验证集的x，y， 现在开始初始化验证集
-    valid_y2_temp = np.argmax(valid_y, 1)
-    valid_y2 = model.predict(valid_x)
-    valid_y2 = np.argmax(valid_y2, 1)
     valid_y2 = valid_y2 * valid_y2_temp
-    train_y2 = train_y2 + 1
-    test_y2 = test_y2 + 1
-    valid_y2 = valid_y2 + 1
-    train_y2[(train_y2 == 1) | (train_y2 == 5)] = 1
-    train_y2[(train_y2 == 2) | (train_y2 == 3)] = 0
-    test_y2[(test_y2 == 1) | (test_y2 == 5)] = 1
-    test_y2[(test_y2 == 2) | (test_y2 == 3)] = 0
-    valid_y2[(valid_y2 == 1) | (valid_y2 == 5)] = 1
-    valid_y2[(valid_y2 == 2) | (valid_y2 == 3)] = 0
-    pdb.set_trace()
+
+    train_y2[train_y2 == 9] = 1
+    train_y2[(train_y2 == 1)] = 1
+    train_y2[train_y2 != 1] = 0
+    test_y2[(test_y2 == 1) | (test_y2 == 9)] = 1
+    test_y2[test_y2 != 1] = 0
+    valid_y2[(valid_y2 == 1) | (valid_y2 == 9)] = 1
+    valid_y2[valid_y2!=1] = 0
 
     encode1 = train_y2.reshape(len(train_y2), 1)
     encode2 = test_y2.reshape(len(test_y2), 1)
@@ -275,7 +265,7 @@ for i in range(len(tradeday_series) - train_day - valid_day - test_day + 1):
     model2.add(LSTM(64, input_shape=(1, 90),kernel_initializer='normal',activation='relu'))
     # model2.add(Dense(60,input(90),activation='relu'))
     model2.add(Dense(2,kernel_initializer='normal',activation='softmax'))
-    model2.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
+    model2.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     model2.fit(train_x, train_y2, epochs=10,callbacks=callbacks2, validation_data=(valid_x, valid_y2), shuffle=False,
                verbose=2, batch_size=128)
     # 模型评估
